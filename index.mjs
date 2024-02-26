@@ -1,11 +1,19 @@
+import express from 'express';
 import axios from 'axios';
+import cors from 'cors';
 
-export const handler = async (event) => {
-    let { url } = JSON.parse(event.body); // Assuming the URL is passed in the event body
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors()); // Enable CORS for all routes
+app.use(express.json()); // Parse JSON bodies
+
+app.post('/scrape', async (req, res) => {
+    let { url } = req.body;
 
     try {
         if (!isValidUrl(url)) {
-            return createResponse(400, { error: 'Invalid URL' });
+            return res.status(400).json({ error: 'Invalid URL' });
         }
 
         // Replace 'view-post.html' with 'view-post-x.php' in the URL
@@ -15,12 +23,12 @@ export const handler = async (event) => {
         const response = await axios.get(url);
         const data = response.data; // This should be the JSON data you're interested in
 
-        return createResponse(200, data); // Return the fetched data
+        res.status(200).json(data); // Return the fetched data
     } catch (error) {
         console.error('Error:', error);
-        return createResponse(500, { error: 'An unexpected error occurred' });
+        res.status(500).json({ error: 'An unexpected error occurred' });
     }
-};
+});
 
 function isValidUrl(string) {
     let url;
@@ -34,14 +42,6 @@ function isValidUrl(string) {
     return url.protocol === "http:" || url.protocol === "https:";
 }
 
-function createResponse(statusCode, body) {
-    return {
-        isBase64Encoded: false,
-        statusCode,
-        headers: {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*', // Add CORS header if needed
-        },
-        body: JSON.stringify(body),
-    };
-}
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
