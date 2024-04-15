@@ -1,67 +1,69 @@
 import express from 'express';
-import axios from 'axios';
+import mysql from 'mysql';
 import cors from 'cors';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json()); // Parse JSON bodies
+// Setup database connection
+const db = mysql.createConnection({
+  host: 'mudfoot.doc.stu.mmu.ac.uk',
+  user: 'bahkaras',
+  password: 'hirsponD3',
+  database: 'bahkaras',
+  port: 6306
+});
 
-// Function to handle requests with retries
-async function fetchWithRetry(url, retries = 3, delay = 1000) {
-  try {
-    const response = await axios.get(url);
-    return response.data;
-  } catch (error) {
-    console.error(`Attempt ${4 - retries} failed: ${error.message}`);
-    if (retries > 1) {
-      await new Promise(resolve => setTimeout(resolve, delay)); // Wait before retrying
-      return fetchWithRetry(url, retries - 1, delay * 2); // Exponential backoff
-    } else {
-      throw error; // Rethrow the error after last retry
-    }
+db.connect(err => {
+  if (err) {
+    return console.error('error connecting: ' + err.stack);
   }
-}
+  console.log('connected as id ' + db.threadId);
+});
+
+app.use(cors());
+app.use(express.json());
 
 app.post('/scrape', async (req, res) => {
-    let { url } = req.body;
+  const { url } = req.body;
 
-    try {
-        if (!isValidUrl(url)) {
-            return res.status(400).json({ error: 'Invalid URL' });
-        }
+  if (!isValidUrl(url)) {
+    return res.status(400).json({ error: 'Invalid URL' });
+  }
 
-        // Replace 'view-post.html' with 'view-post-x.php' in the URL
-        url = url.replace('view-post.html', 'view-post-x.php');
+  // Extract CarouselItemID from URL
+  const carouselItemId = url.split('content=')[1].split('&')[0];
 
-        // Fetch the data from the modified URL with retries
-        const data = await fetchWithRetry(url);
-        res.status(200).json(data); // Return the fetched data
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'An unexpected error occurred' });
+  // Query the database
+  db.query('SELECT * FROM CarouselItems WHERE CarouselItemID = ?', [carouselItemId], (error, results) => {
+    if (error) {
+      console.error('Database error:', error);
+      return res.status(500).json({ error: 'Failed to retrieve data' });
     }
+    if (results.length > 0) {
+      res.status(200).json(results);
+    } else {
+      res.status(404).json({ error: 'No content found' });
+    }
+  });
 });
 
 function isValidUrl(string) {
-    let url;
-  
-    try {
-        url = new URL(string);
-    } catch (_) {
-        return false;  
-    }
-  
-    return url.protocol === "http:" || url.protocol === "https:";
+  let url;
+  try {
+    url = new URL(string);
+  } catch (_) {
+    return false;  
+  }
+  return url.protocol === "http:" || url.protocol === "https:";
 }
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error('Unhandled Error:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
+  console.error('Unhandled Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
