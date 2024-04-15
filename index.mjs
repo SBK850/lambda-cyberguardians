@@ -17,26 +17,24 @@ const dbConfig = {
 let db;
 
 function handleDisconnect() {
-    db = mysql.createConnection(dbConfig); // Recreate the connection
+    db = mysql.createConnection(dbConfig);
 
-    // Connect to the database
     db.connect(err => {
         if (err) {
             console.error('Error when connecting to db:', err);
-            // We introduce a delay before attempting to reconnect to avoid a hot loop
             setTimeout(handleDisconnect, 2000);
         } else {
             console.log('Connected to the database successfully');
         }
     });
 
-    // Handle errors after the initial connection has been established
     db.on('error', err => {
-        console.error('Database error:', err);
-        if (err.code === 'PROTOCOL_CONNECTION_LOST') { // Connection to the MySQL server is usually lost due to either server restart or a connnection idle timeout
-            handleDisconnect(); // Recreate the connection
+        if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
+            console.error('Lost connection to the database, reconnecting:', err);
+            handleDisconnect();
         } else {
-            throw err; // Throw other errors to be handled by the global error handler
+            console.error('Database error:', err);
+            throw err;
         }
     });
 }
