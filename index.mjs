@@ -61,7 +61,12 @@ app.post('/scrape', async (req, res) => {
             if (results.length === 0) {
                 return res.status(404).json({ error: 'No matching content found' });
             }
-            res.json(results[0]); // Return the first matching result
+            // Convert BLOB to Base64
+            const post = results[0];
+            if (post.UploadedImageData) {
+                post.UploadedImageData = Buffer.from(post.UploadedImageData).toString('base64');
+            }
+            res.json(post); // Return the first matching result
         });
     } catch (error) {
         console.error('Error:', error);
