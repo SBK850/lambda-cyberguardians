@@ -51,8 +51,13 @@ app.post('/scrape', async (req, res) => {
         const urlObj = new URL(url);
         const contentParam = urlObj.searchParams.get('content');
         
-        // Prepare the SQL query to search for the post
-        const query = "SELECT * FROM CarouselItems WHERE PostURL LIKE ?";
+        // Prepare the SQL query to search for the post with user details
+        const query = `
+            SELECT ci.*, u.FirstName, u.LastName, u.Age, u.Education, u.ProfilePictureURL 
+            FROM CarouselItems ci
+            JOIN Users u ON ci.UserID = u.UserID
+            WHERE ci.PostURL LIKE ?
+        `;
         db.query(query, [`%${contentParam}%`], (err, results) => {
             if (err) {
                 console.error('Database query error:', err);
@@ -62,11 +67,11 @@ app.post('/scrape', async (req, res) => {
                 return res.status(404).json({ error: 'No matching content found' });
             }
             // Convert BLOB to Base64
-            const post = results[0];
-            if (post.UploadedImageData) {
-                post.UploadedImageData = Buffer.from(post.UploadedImageData).toString('base64');
+            const postWithUserDetails = results[0];
+            if (postWithUserDetails.UploadedImageData) {
+                postWithUserDetails.UploadedImageData = Buffer.from(postWithUserDetails.UploadedImageData).toString('base64');
             }
-            res.json(post); // Return the first matching result
+            res.json(postWithUserDetails); // Return the first matching result with user details
         });
     } catch (error) {
         console.error('Error:', error);
