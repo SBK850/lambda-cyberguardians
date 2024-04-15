@@ -3,25 +3,45 @@ import mysql from 'mysql';
 import cors from 'cors';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 // Database configuration
-const db = mysql.createConnection({
+const dbConfig = {
     host: 'mudfoot.doc.stu.mmu.ac.uk',
     user: 'bahkaras',
     password: 'hirsponD3',
     database: 'bahkaras',
     port: 6306
-});
+};
 
-// Connect to the database
-db.connect(err => {
-    if (err) {
-        console.error('Database connection error:', err);
-        return;
-    }
-    console.log('Connected to the database successfully');
-});
+let db;
+
+function handleDisconnect() {
+    db = mysql.createConnection(dbConfig); // Recreate the connection
+
+    // Connect to the database
+    db.connect(err => {
+        if (err) {
+            console.error('Error when connecting to db:', err);
+            // We introduce a delay before attempting to reconnect to avoid a hot loop
+            setTimeout(handleDisconnect, 2000);
+        } else {
+            console.log('Connected to the database successfully');
+        }
+    });
+
+    // Handle errors after the initial connection has been established
+    db.on('error', err => {
+        console.error('Database error:', err);
+        if (err.code === 'PROTOCOL_CONNECTION_LOST') { // Connection to the MySQL server is usually lost due to either server restart or a connnection idle timeout
+            handleDisconnect(); // Recreate the connection
+        } else {
+            throw err; // Throw other errors to be handled by the global error handler
+        }
+    });
+}
+
+handleDisconnect(); // Initial connection setup with reconnection handling
 
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Parse JSON bodies
