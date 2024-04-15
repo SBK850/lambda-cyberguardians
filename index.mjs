@@ -29,15 +29,14 @@ function handleDisconnect() {
     });
 
     db.on('error', err => {
+        console.error('Database error:', err);
         if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
-            console.error('Lost connection to the database, reconnecting:', err);
+            console.log('Attempting to reconnect to the database...');
             handleDisconnect();
-        } else {
-            console.error('Database error:', err);
-            throw err;
         }
     });
 }
+
 
 handleDisconnect(); // Initial connection setup with reconnection handling
 
