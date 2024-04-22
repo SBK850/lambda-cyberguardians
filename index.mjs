@@ -37,63 +37,58 @@ function handleDisconnect() {
     });
 }
 
-
 handleDisconnect(); // Initial connection setup with reconnection handling
 
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Parse JSON bodies
 
-// Validates the URL format
-function isValidUrl(string) {
-    let url;
-  
-    try {
-        url = new URL(string);
-    } catch (_) {
-        return false;  
+// Middleware to check if the database connection is alive
+function ensureDbConnection(req, res, next) {
+    if (!db || db.state === 'disconnected') {
+        res.status(503).send('Service unavailable. Please try again later.');
+    } else {
+        next();
     }
-  
-    return url.protocol === "http:" || url.protocol === "https:";
+}
+
+// Validates the URL format
+function validateUrl(req, res, next) {
+    try {
+        new URL(req.body.url);
+        next();
+    } catch (error) {
+        res.status(400).json({ error: 'Invalid URL' });
+    }
 }
 
 // API endpoint to scrape data based on the URL
-app.post('/scrape', async (req, res) => {
+app.post('/scrape', ensureDbConnection, validateUrl, async (req, res) => {
     const { url } = req.body;
+    const urlObj = new URL(url);
+    const contentParam = urlObj.searchParams.get('content');
 
-    try {
-        if (!isValidUrl(url)) {
-            return res.status(400).json({ error: 'Invalid URL' });
+    // Prepare the SQL query to search for the post with user details
+    const query = `
+        SELECT ci.*, u.FirstName, u.LastName, u.Age, u.Education, u.ProfilePictureURL 
+        FROM CarouselItems ci
+        JOIN Users u ON ci.UserID = u.UserID
+        WHERE ci.PostURL LIKE ?
+    `;
+    db.query(query, [`%${contentParam}%`], (err, results) => {
+        if (err) {
+            console.error('Database query error:', err);
+            return res.status(500).json({ error: 'An unexpected error occurred while querying the database' });
         }
-
-        const urlObj = new URL(url);
-        const contentParam = urlObj.searchParams.get('content');
-        
-        // Prepare the SQL query to search for the post with user details
-        const query = `
-            SELECT ci.*, u.FirstName, u.LastName, u.Age, u.Education, u.ProfilePictureURL 
-            FROM CarouselItems ci
-            JOIN Users u ON ci.UserID = u.UserID
-            WHERE ci.PostURL LIKE ?
-        `;
-        db.query(query, [`%${contentParam}%`], (err, results) => {
-            if (err) {
-                console.error('Database query error:', err);
-                return res.status(500).json({ error: 'An unexpected error occurred while querying the database' });
-            }
-            if (results.length === 0) {
-                return res.status(404).json({ error: 'No matching content found' });
-            }
-            // Convert BLOB to Base64
-            const postWithUserDetails = results[0];
-            if (postWithUserDetails.UploadedImageData) {
-                postWithUserDetails.UploadedImageData = Buffer.from(postWithUserDetails.UploadedImageData).toString('base64');
-            }
-            res.json(postWithUserDetails); // Return the first matching result with user details
-        });
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'An unexpected error occurred' });
-    }
+        if (results.length === 0) {
+            return res.status(404).json({ error: 'No matching content found' });
+        }
+        // Convert BLOB to Base64
+        const postWithUserDetails = results[0];
+        if (postWithUserDetails.UploadedImageData) {
+            postWithUserDetails.UploadedImageData = Buffer.from(postWithUserDetails.UploadedImageData).toString('base64');
+        }
+        res.json(postWithUserDetails); // Return the first matching result with user details
+    });
 });
 
 // Error handling middleware
