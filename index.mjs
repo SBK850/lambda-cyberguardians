@@ -6,10 +6,10 @@ import rateLimit from 'express-rate-limit';
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Apply rate limiting to all requests
+// rate limiting to all requests
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000, 
+  max: 50
 });
 
 // Database configuration
