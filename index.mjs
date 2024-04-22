@@ -1,9 +1,16 @@
 import express from 'express';
 import mysql from 'mysql';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const PORT = process.env.PORT || 10000;
+
+// Apply rate limiting to all requests
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
 
 // Database configuration
 const dbConfig = {
@@ -30,8 +37,12 @@ pool.on('release', function (connection) {
     console.log('Connection %d released', connection.threadId);
 });
 
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json()); // Parse JSON bodies
+// Use the limiter middleware
+app.use(limiter);
+
+// Apply CORS and JSON parsing middleware
+app.use(cors());
+app.use(express.json());
 
 // Middleware to check if the database connection is alive
 function ensureDbConnection(req, res, next) {
