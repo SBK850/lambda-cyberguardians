@@ -11,44 +11,44 @@ const dbConfig = {
     user: 'bahkaras',
     password: 'hirsponD3',
     database: 'bahkaras',
-    port: 6306
+    port: 6306,
+    connectionLimit: 10 // Adjust according to your application's needs
 };
 
-let db;
+// Create a MySQL pool
+const pool = mysql.createPool(dbConfig);
 
-function handleDisconnect() {
-    db = mysql.createConnection(dbConfig);
+pool.on('acquire', function (connection) {
+    console.log('Connection %d acquired', connection.threadId);
+});
 
-    db.connect(err => {
-        if (err) {
-            console.error('Error when connecting to db:', err);
-            setTimeout(handleDisconnect, 2000);
-        } else {
-            console.log('Connected to the database successfully');
-        }
-    });
+pool.on('enqueue', function () {
+    console.log('Waiting for available connection slot');
+});
 
-    db.on('error', err => {
-        console.error('Database error:', err);
-        if (err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ECONNRESET') {
-            console.log('Attempting to reconnect to the database...');
-            handleDisconnect();
-        }
-    });
-}
-
-handleDisconnect(); // Initial connection setup with reconnection handling
+pool.on('release', function (connection) {
+    console.log('Connection %d released', connection.threadId);
+});
 
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Parse JSON bodies
 
 // Middleware to check if the database connection is alive
 function ensureDbConnection(req, res, next) {
-    if (!db || db.state === 'disconnected') {
-        res.status(503).send('Service unavailable. Please try again later.');
-    } else {
-        next();
-    }
+    pool.getConnection((err, connection) => {
+        if (err) {
+            console.error('Failed to get a database connection:', err);
+            res.status(503).send('Database service unavailable. Please try again later.');
+        } else {
+            console.log('Database connection successfully retrieved from pool');
+            // Attach connection to the request and handle its release
+            req.db = connection;
+            res.on('finish', () => {
+                req.db.release();
+            });
+            next();
+        }
+    });
 }
 
 // Validates the URL format
@@ -62,19 +62,18 @@ function validateUrl(req, res, next) {
 }
 
 // API endpoint to scrape data based on the URL
-app.post('/scrape', ensureDbConnection, validateUrl, async (req, res) => {
+app.post('/scrape', ensureDbConnection, validateUrl, (req, res) => {
     const { url } = req.body;
     const urlObj = new URL(url);
     const contentParam = urlObj.searchParams.get('content');
 
-    // Prepare the SQL query to search for the post with user details
     const query = `
         SELECT ci.*, u.FirstName, u.LastName, u.Age, u.Education, u.ProfilePictureURL 
         FROM CarouselItems ci
         JOIN Users u ON ci.UserID = u.UserID
         WHERE ci.PostURL LIKE ?
     `;
-    db.query(query, [`%${contentParam}%`], (err, results) => {
+    req.db.query(query, [`%${contentParam}%`], (err, results) => {
         if (err) {
             console.error('Database query error:', err);
             return res.status(500).json({ error: 'An unexpected error occurred while querying the database' });
