@@ -12,17 +12,17 @@ const limiter = rateLimit({
   max: 50
 });
 
-// Database configuration
+// database configuration
 const dbConfig = {
     host: 'mudfoot.doc.stu.mmu.ac.uk',
     user: 'bahkaras',
     password: 'hirsponD3',
     database: 'bahkaras',
     port: 6306,
-    connectionLimit: 10 // Adjust according to your application's needs
+    connectionLimit: 10 
 };
 
-// Create a MySQL pool
+// MySQL pool
 const pool = mysql.createPool(dbConfig);
 
 pool.on('acquire', function (connection) {
@@ -37,14 +37,14 @@ pool.on('release', function (connection) {
     console.log('Connection %d released', connection.threadId);
 });
 
-// Use the limiter middleware
+//limiter middleware
 app.use(limiter);
 
-// Apply CORS and JSON parsing middleware
+// CORS and JSON parsing middleware
 app.use(cors());
 app.use(express.json());
 
-// Middleware to check if the database connection is alive
+// middleware to check if the database connection is alive
 function ensureDbConnection(req, res, next) {
     pool.getConnection((err, connection) => {
         if (err) {
@@ -62,7 +62,7 @@ function ensureDbConnection(req, res, next) {
     });
 }
 
-// Validates the URL format
+// validates the URL format
 function validateUrl(req, res, next) {
     try {
         new URL(req.body.url);
@@ -101,7 +101,7 @@ app.post('/scrape', ensureDbConnection, validateUrl, (req, res) => {
     });
 });
 
-// Error handling middleware
+// error handling middleware
 app.use((err, req, res, next) => {
     console.error('Unhandled Error:', err);
     res.status(500).json({ error: 'Internal Server Error' });
